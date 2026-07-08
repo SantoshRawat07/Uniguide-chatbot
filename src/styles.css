@@ -73,23 +73,43 @@
   --sidebar-border: oklch(0.28 0.03 20);
   --sidebar-ring: oklch(0.52 0.22 25);
 
-  --gradient-hero: linear-gradient(135deg, oklch(0.52 0.22 25) 0%, oklch(0.4 0.18 15) 50%, oklch(0.28 0.08 20) 100%);
+  --gradient-hero: linear-gradient(
+    135deg,
+    oklch(0.52 0.22 25) 0%,
+    oklch(0.4 0.18 15) 50%,
+    oklch(0.28 0.08 20) 100%
+  );
   --gradient-primary: linear-gradient(135deg, var(--primary), var(--primary-glow));
   --shadow-elegant: 0 20px 60px -20px color-mix(in oklab, var(--primary) 35%, transparent);
   --shadow-soft: 0 4px 20px -6px color-mix(in oklab, var(--foreground) 12%, transparent);
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
   }
-  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
 }
 
-@utility bg-hero-gradient { background-image: var(--gradient-hero); }
-@utility bg-primary-gradient { background-image: var(--gradient-primary); }
-@utility shadow-elegant { box-shadow: var(--shadow-elegant); }
-@utility shadow-soft { box-shadow: var(--shadow-soft); }
+@utility bg-hero-gradient {
+  background-image: var(--gradient-hero);
+}
+@utility bg-primary-gradient {
+  background-image: var(--gradient-primary);
+}
+@utility shadow-elegant {
+  box-shadow: var(--shadow-elegant);
+}
+@utility shadow-soft {
+  box-shadow: var(--shadow-soft);
+}

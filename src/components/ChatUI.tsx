@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, FileText, Sparkles } from "lucide-react";
+import { Send, Bot, User, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import axios from "axios";
 
@@ -11,7 +11,8 @@ type Message = {
   sources?: (number | string)[];
 };
 
-const API_URL = "http://localhost:8000/chat";
+const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const CHAT_URL = `${API_BASE}/chat`;
 
 const SUGGESTIONS = [
   "What programs does Techspire College offer?",
@@ -19,6 +20,12 @@ const SUGGESTIONS = [
   "What are the tuition fees?",
   "Tell me about campus facilities.",
 ];
+
+const FALLBACK_MESSAGE = `I’m sorry, but I don’t have that information in the uploaded brochure.
+
+You can ask or contact the college administration to know more about it. Please reach out to the admissions office at:
+- Phone: +977-1-1234567
+- Email: admissions@techspire.edu.np`;
 
 export function ChatUI() {
   const [messages, setMessages] = useState<Message[]>([
@@ -45,14 +52,19 @@ export function ChatUI() {
     setInput("");
     setTyping(true);
     try {
-      const { data } = await axios.post(API_URL, { question }, { timeout: 60000 });
+      const { data } = await axios.post(CHAT_URL, { question }, { timeout: 60000 });
       const answer = data?.answer ?? data?.response ?? "No answer returned.";
+      const normalizedAnswer = (answer ?? "").toString().trim();
+      const fallbackAnswer = normalizedAnswer.length > 0 ? normalizedAnswer : FALLBACK_MESSAGE;
+      const finalAnswer = normalizedAnswer.toLowerCase().includes("i don't know") || normalizedAnswer.toLowerCase().includes("don't have") || normalizedAnswer.toLowerCase().includes("not found")
+        ? FALLBACK_MESSAGE
+        : fallbackAnswer;
       const sources = data?.sources ?? data?.pages ?? [];
-      setMessages((m) => [...m, { id: crypto.randomUUID(), role: "ai", content: answer, sources }]);
+      setMessages((m) => [...m, { id: crypto.randomUUID(), role: "ai", content: finalAnswer, sources }]);
     } catch (err) {
       const msg =
         axios.isAxiosError(err) && err.code === "ERR_NETWORK"
-          ? "⚠️ Couldn't reach the AI backend at `http://localhost:8000/chat`. Please make sure the server is running."
+          ? `⚠️ Couldn't reach the AI backend at ${CHAT_URL}. Please make sure the server is running.`
           : `⚠️ ${(err as Error).message}`;
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: "ai", content: msg }]);
     } finally {
@@ -69,12 +81,16 @@ export function ChatUI() {
         <div>
           <div className="font-semibold text-foreground">UniGuide AI</div>
           <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Online · Answers from official brochure
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Online · Answers
+            from official brochure
           </div>
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-5 bg-gradient-to-b from-background to-muted/30">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-5 bg-gradient-to-b from-background to-muted/30"
+      >
         <AnimatePresence initial={false}>
           {messages.map((m) => (
             <motion.div
@@ -84,29 +100,30 @@ export function ChatUI() {
               transition={{ duration: 0.25 }}
               className={`flex items-start gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}
             >
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${m.role === "user" ? "bg-foreground text-background" : "bg-primary-gradient text-primary-foreground"}`}>
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${m.role === "user" ? "bg-foreground text-background" : "bg-primary-gradient text-primary-foreground"}`}
+              >
                 {m.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
               </div>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-soft ${m.role === "user" ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-card border border-border rounded-tl-sm"}`}>
-                <div className={`prose prose-sm max-w-none ${m.role === "user" ? "prose-invert" : ""}`}>
+              <div
+                className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-soft ${m.role === "user" ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-card border border-border rounded-tl-sm"}`}
+              >
+                <div
+                  className={`prose prose-sm max-w-none ${m.role === "user" ? "prose-invert" : ""}`}
+                >
                   <ReactMarkdown>{m.content}</ReactMarkdown>
                 </div>
-                {m.sources && m.sources.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {m.sources.map((s, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-accent text-accent-foreground border border-primary/20">
-                        <FileText className="w-3 h-3" /> Page {s}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
 
         {typing && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-start gap-3">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-start gap-3"
+          >
             <div className="w-9 h-9 rounded-full bg-primary-gradient flex items-center justify-center">
               <Bot className="w-4 h-4 text-primary-foreground" />
             </div>
