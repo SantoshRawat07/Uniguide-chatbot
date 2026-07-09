@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { toast, Toaster } from "sonner";
@@ -11,6 +11,9 @@ import {
   CloudUpload,
   Database,
   Activity,
+  Users,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import {
   BarChart,
@@ -27,7 +30,7 @@ import { Navbar } from "@/components/Navbar";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
-type Tab = "dashboard" | "upload" | "settings";
+type Tab = "dashboard" | "upload" | "settings" | "leads";
 
 type Brochure = {
   name: string;
@@ -37,6 +40,7 @@ type Brochure = {
 
 const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "leads", label: "My Leads", icon: Users },
   { id: "upload", label: "Upload Brochure", icon: Upload },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -77,11 +81,10 @@ export function AdminPage() {
               <button
                 key={item.id}
                 onClick={() => setTab(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
-                  tab === item.id
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${tab === item.id
                     ? "bg-primary text-primary-foreground shadow-soft"
                     : "hover:bg-accent text-foreground/80"
-                }`}
+                  }`}
               >
                 <item.icon className="w-4 h-4" />
                 {item.label}
@@ -96,11 +99,10 @@ export function AdminPage() {
               <button
                 key={item.id}
                 onClick={() => setTab(item.id)}
-                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border ${
-                  tab === item.id
+                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border ${tab === item.id
                     ? "bg-primary text-primary-foreground border-primary"
                     : "border-border"
-                }`}
+                  }`}
               >
                 {item.label}
               </button>
@@ -108,6 +110,7 @@ export function AdminPage() {
           </div>
 
           {tab === "dashboard" && <Dashboard brochure={brochure} />}
+          {tab === "leads" && <LeadsPanel />}
           {tab === "upload" && <UploadBrochure brochure={brochure} onUploaded={setBrochure} />}
           {tab === "settings" && <SettingsPanel />}
         </main>
@@ -276,11 +279,10 @@ function UploadBrochure({
             setDragging(false);
             handleFile(event.dataTransfer.files?.[0] ?? null);
           }}
-          className={`block border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ${
-            dragging
+          className={`block border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition ${dragging
               ? "border-primary bg-primary/5"
               : "border-border hover:border-primary/50 hover:bg-muted/40"
-          }`}
+            }`}
         >
           <input
             type="file"
@@ -359,6 +361,181 @@ function Info({ label, value, success }: { label: string; value: string; success
         {success && <CheckCircle2 className="w-4 h-4" />} <span className="truncate">{value}</span>
       </div>
     </div>
+  );
+}
+
+function formatSubmittedDate(value?: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString();
+}
+
+function LeadsPanel() {
+  const [leads, setLeads] = useState<Array<Record<string, string>>>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+
+  const loadLeads = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE}/leads`);
+      setLeads(data?.leads ?? []);
+      setSelectedIds([]);
+    } catch {
+      setLeads([]);
+    }
+  };
+
+  useEffect(() => {
+    void loadLeads();
+  }, []);
+
+  const toggleSelection = (leadId: string) => {
+    setSelectedIds((prev) => (prev.includes(leadId) ? prev.filter((id) => id !== leadId) : [...prev, leadId]));
+  };
+
+  const startEdit = (lead: Record<string, string>) => {
+    setEditingId(String(lead.id));
+    setDraft({
+      full_name: lead.full_name ?? "",
+      current_class: lead.current_class ?? "",
+      program_interest: lead.program_interest ?? "",
+      phone_number: lead.phone_number ?? "",
+      gpa: lead.gpa ?? lead.marks_12 ?? "",
+      email: lead.email ?? "",
+    });
+  };
+
+  const saveEdit = async (leadId: string) => {
+    try {
+      await axios.put(`${API_BASE}/leads/${leadId}`, draft);
+      setEditingId(null);
+      setDraft({});
+      await loadLeads();
+      toast.success("Lead updated.");
+    } catch {
+      toast.error("Could not update lead.");
+    }
+  };
+
+  const deleteLead = async (leadId: string) => {
+    try {
+      await axios.delete(`${API_BASE}/leads/${leadId}`);
+      await loadLeads();
+      toast.success("Lead deleted.");
+    } catch {
+      toast.error("Could not delete lead.");
+    }
+  };
+
+  const deleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      await axios.post(`${API_BASE}/leads/delete-selected`, { lead_ids: selectedIds });
+      await loadLeads();
+      toast.success("Selected leads deleted.");
+    } catch {
+      toast.error("Could not delete selected leads.");
+    }
+  };
+
+  const clearAll = async () => {
+    try {
+      await axios.delete(`${API_BASE}/leads`);
+      await loadLeads();
+      toast.success("All leads cleared.");
+    } catch {
+      toast.error("Could not clear leads.");
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <h1 className="text-2xl font-bold mb-1">My Leads</h1>
+      <p className="text-muted-foreground text-sm mb-6">
+        Student enquiries submitted through the form are listed here.
+      </p>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button onClick={deleteSelected} disabled={selectedIds.length === 0} className="rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50">
+          Delete selected
+        </button>
+        <button onClick={clearAll} className="rounded-lg border border-border px-3 py-2 text-sm">
+          Delete all leads
+        </button>
+      </div>
+
+      <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-soft">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-muted/60 text-left">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Select</th>
+                <th className="px-4 py-3 font-semibold">Name</th>
+                <th className="px-4 py-3 font-semibold">Class</th>
+                <th className="px-4 py-3 font-semibold">Program</th>
+                <th className="px-4 py-3 font-semibold">GPA</th>
+                <th className="px-4 py-3 font-semibold">Phone number</th>
+                <th className="px-4 py-3 font-semibold">Email</th>
+                <th className="px-4 py-3 font-semibold">Submitted</th>
+                <th className="px-4 py-3 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
+                    No leads yet.
+                  </td>
+                </tr>
+              ) : (
+                leads.map((lead, index) => {
+                  const leadId = String(lead.id ?? "");
+                  const isEditing = editingId === leadId;
+                  return (
+                    <tr key={`${lead.email ?? index}-${index}`} className="border-t border-border">
+                      <td className="px-4 py-3">
+                        <input type="checkbox" checked={selectedIds.includes(leadId)} onChange={() => toggleSelection(leadId)} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditing ? <input value={draft.full_name ?? ""} onChange={(event) => setDraft((prev) => ({ ...prev, full_name: event.target.value }))} className="w-full rounded border border-border px-2 py-1" /> : (lead.full_name ?? "—")}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditing ? <input value={draft.current_class ?? ""} onChange={(event) => setDraft((prev) => ({ ...prev, current_class: event.target.value }))} className="w-full rounded border border-border px-2 py-1" /> : (lead.current_class ?? "—")}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditing ? <input value={draft.program_interest ?? ""} onChange={(event) => setDraft((prev) => ({ ...prev, program_interest: event.target.value }))} className="w-full rounded border border-border px-2 py-1" /> : (lead.program_interest ?? "—")}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditing ? <input value={draft.gpa ?? ""} onChange={(event) => setDraft((prev) => ({ ...prev, gpa: event.target.value }))} className="w-full rounded border border-border px-2 py-1" /> : (lead.gpa ?? lead.marks_12 ?? "—")}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditing ? <input value={draft.email ?? ""} onChange={(event) => setDraft((prev) => ({ ...prev, email: event.target.value }))} className="w-full rounded border border-border px-2 py-1" /> : (lead.email ?? "—")}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isEditing ? <input value={draft.phone_number ?? ""} onChange={(event) => setDraft((prev) => ({ ...prev, phone_number: event.target.value }))} className="w-full rounded border border-border px-2 py-1" /> : (lead.phone_number ?? "—")}
+                      </td>
+                      <td className="px-4 py-3">{formatSubmittedDate(lead.submitted_at)}</td>
+                      <td className="px-4 py-3">
+                        {isEditing ? (
+                          <button onClick={() => saveEdit(leadId)} className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground">Save</button>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button onClick={() => startEdit(lead)} className="rounded border border-border p-1.5"><Pencil className="h-4 w-4" /></button>
+                            <button onClick={() => deleteLead(leadId)} className="rounded border border-border p-1.5"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
